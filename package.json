@@ -1,0 +1,27 @@
+{
+  "name": "broadcast-system",
+  "version": "2.0.0",
+  "description": "Sistema de difusión para Smart TV con panel administrativo en tiempo real",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.3.0",
+    "mysql2": "^3.24.4",
+    "sequelize": "^6.37.8",
+    "socket.io": "^4.8.3",
+    "sortablejs": "^1.15.7",
+    "tedious": "^20.0.0",
+    "uuid": "^14.0.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}

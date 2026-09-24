@@ -1,0 +1,1284 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BroadcastOS — Panel</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet"/>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+:root{
+  --bg:#080c14;--surface:#0f1623;--surface2:#151d2e;
+  --border:rgba(255,255,255,.08);--border2:rgba(255,255,255,.14);
+  --accent:#3b82f6;--accent2:#6366f1;
+  --success:#22c55e;--warning:#f59e0b;--danger:#ef4444;
+  --text:#f0f4ff;--muted:#64748b;--muted2:#94a3b8;
+  --radius:14px;--radius-sm:8px;--sidebar:260px;--header:64px;
+}
+:root.light{
+  --bg:#f0f4f8;--surface:#ffffff;--surface2:#f1f5f9;
+  --border:rgba(0,0,0,.08);--border2:rgba(0,0,0,.14);
+  --accent:#2563eb;--accent2:#4f46e5;
+  --success:#16a34a;--warning:#d97706;--danger:#dc2626;
+  --text:#0f172a;--muted:#64748b;--muted2:#475569;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-height:1.5;overflow:hidden}
+
+/* ── LIGHT MODE OVERRIDES ── */
+:root.light .sidebar{background:#1e3a5f}
+:root.light .sidebar-logo{border-color:rgba(255,255,255,.15)}
+:root.light .nav-item{color:rgba(255,255,255,.7)}
+:root.light .nav-item:hover{background:rgba(255,255,255,.1);color:#fff}
+:root.light .nav-item.active{background:rgba(255,255,255,.15);color:#fff}
+:root.light .nav-section{color:rgba(255,255,255,.4)}
+:root.light .user-card{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.15)}
+:root.light .user-name{color:#fff}
+:root.light .user-role{color:rgba(255,255,255,.7)}
+:root.light .topbar{background:#fff;border-color:#e2e8f0}
+:root.light .stat-card{background:#fff;border-color:#e2e8f0}
+:root.light .pub-card{background:#fff;border-color:#e2e8f0}
+:root.light .pub-card:hover{border-color:#cbd5e1}
+:root.light .pub-body{background:#fff}
+:root.light .pub-footer{background:#fff;border-color:#f1f5f9}
+:root.light .meta-chip{background:#f8fafc;border-color:#e2e8f0;color:#64748b}
+:root.light .modal{background:#fff;border-color:#e2e8f0}
+:root.light .form-control{background:#f8fafc;border-color:#e2e8f0;color:#0f172a}
+:root.light .form-control:focus{border-color:var(--accent)}
+:root.light .btn-ghost{background:#f8fafc;border-color:#e2e8f0;color:#0f172a}
+:root.light .btn-ghost:hover{background:#f1f5f9}
+:root.light .search-box{background:#f8fafc;border-color:#e2e8f0}
+:root.light .search-box input{color:#0f172a}
+:root.light .table-wrap{background:#fff;border-color:#e2e8f0}
+:root.light th{background:#f8fafc}
+:root.light td{border-color:#f1f5f9}
+:root.light tr:hover td{background:#f8fafc}
+:root.light .settings-card{background:#fff;border-color:#e2e8f0}
+:root.light .toast.info{background:rgba(37,99,235,.1);border-color:rgba(37,99,235,.3)}
+:root.light #mobileSearch{background:#fff;border-color:#e2e8f0}
+:root.light .upload-zone{border-color:#e2e8f0}
+:root.light .sidebar-footer{border-color:rgba(255,255,255,.1)}
+
+/* ── LOGIN ── */
+#loginScreen{
+  position:fixed;inset:0;z-index:9999;
+  background:var(--bg);
+  display:flex;align-items:center;justify-content:center;
+}
+.login-box{
+  width:100%;max-width:400px;padding:20px;
+  display:flex;flex-direction:column;align-items:center;gap:32px;
+}
+.login-logo{display:flex;flex-direction:column;align-items:center;gap:12px}
+.login-icon{width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-size:28px}
+.login-title{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;letter-spacing:-.5px}
+.login-sub{font-size:13px;color:var(--muted2);margin-top:-8px}
+.login-form{
+  width:100%;background:var(--surface);border:1px solid var(--border2);
+  border-radius:var(--radius);padding:28px;display:flex;flex-direction:column;gap:16px;
+}
+.login-error{
+  background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);
+  color:var(--danger);font-size:13px;padding:10px 14px;border-radius:8px;display:none;
+}
+.login-error.show{display:block}
+
+/* ── LAYOUT ── */
+.shell{display:grid;grid-template-columns:var(--sidebar) 1fr;grid-template-rows:var(--header) 1fr;height:100vh;overflow:hidden}
+.sidebar{grid-row:1/3;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;transition:transform .3s}
+.sidebar-logo{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;min-height:var(--header)}
+.logo-mark{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-size:18px;flex-shrink:0}
+.logo-text{font-family:'Syne',sans-serif;font-size:17px;font-weight:800;letter-spacing:-.3px;line-height:1.1}
+.logo-sub{font-size:11px;color:var(--muted2);font-weight:400;letter-spacing:.5px}
+.sidebar-nav{flex:1;overflow-y:auto;padding:16px 12px;display:flex;flex-direction:column;gap:2px}
+.nav-section{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.8px;padding:12px 12px 6px;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:14px;font-weight:500;color:var(--muted2);transition:all .15s;border:none;background:none;width:100%;text-align:left}
+.nav-item:hover{background:rgba(255,255,255,.06);color:var(--text)}
+.nav-item.active{background:rgba(59,130,246,.15);color:var(--accent);border:1px solid rgba(59,130,246,.25)}
+.nav-item.admin-only{display:none}
+.nav-item .icon{width:20px;text-align:center;flex-shrink:0}
+.sidebar-footer{padding:16px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+.user-card{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2);border-radius:var(--radius-sm);border:1px solid var(--border)}
+.user-avatar{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-size:14px;font-weight:700;flex-shrink:0}
+.user-name{font-size:13px;font-weight:600;line-height:1.2}
+.user-role{font-size:11px;color:var(--muted2)}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--success);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.7;transform:scale(1.3)}}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 28px;gap:16px}
+.topbar-title{font-family:'Syne',sans-serif;font-size:20px;font-weight:800}
+.topbar-actions{display:flex;align-items:center;gap:10px}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border-radius:var(--radius-sm);font-size:13.5px;font-weight:600;cursor:pointer;border:none;transition:all .15s;white-space:nowrap}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+.btn-primary:hover{opacity:.9;transform:translateY(-1px)}
+.btn-ghost{background:rgba(255,255,255,.07);color:var(--text);border:1px solid var(--border2)}
+.btn-ghost:hover{background:rgba(255,255,255,.12)}
+.btn-danger{background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3)}
+.btn-danger:hover{background:rgba(239,68,68,.25)}
+.btn-warning{background:rgba(245,158,11,.15);color:var(--warning);border:1px solid rgba(245,158,11,.3)}
+.btn-sm{padding:6px 12px;font-size:12.5px}
+.btn-icon{padding:8px;border-radius:8px;aspect-ratio:1}
+.hamburger{display:none;background:none;border:none;cursor:pointer;color:var(--text);font-size:20px;padding:8px}
+.main{overflow-y:auto;padding:28px;display:flex;flex-direction:column;gap:24px;background:var(--bg)}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;display:flex;align-items:center;gap:16px}
+.stat-icon{width:48px;height:48px;border-radius:12px;display:grid;place-items:center;font-size:22px;flex-shrink:0}
+.stat-icon.blue{background:rgba(59,130,246,.15);color:var(--accent)}
+.stat-icon.green{background:rgba(34,197,94,.15);color:var(--success)}
+.stat-icon.yellow{background:rgba(245,158,11,.15);color:var(--warning)}
+.stat-icon.purple{background:rgba(99,102,241,.15);color:var(--accent2)}
+.stat-val{font-size:28px;font-weight:700;font-family:'Syne',sans-serif;line-height:1}
+.stat-lbl{font-size:12px;color:var(--muted2);margin-top:3px}
+.section-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.section-title{font-family:'Syne',sans-serif;font-size:18px;font-weight:800}
+.search-box{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 12px;font-size:13.5px;color:var(--muted2)}
+.search-box input{background:none;border:none;outline:none;color:var(--text);font-size:13.5px;width:180px}
+.search-box input::placeholder{color:var(--muted)}
+.pub-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.pub-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:border-color .2s,transform .2s;display:flex;flex-direction:column}
+.pub-card:hover{border-color:var(--border2);transform:translateY(-2px)}
+.pub-card.inactive{opacity:.55}
+.pub-card.dragging{opacity:.35;border:2px dashed var(--accent)!important}
+.pub-card.drag-chosen{box-shadow:0 8px 32px rgba(59,130,246,.3);border-color:var(--accent)!important;z-index:999}
+.pub-card.drag-active{opacity:.9}
+.drag-handle{cursor:grab!important;user-select:none}
+.drag-handle:active{cursor:grabbing!important}
+.drag-handle:hover{background:rgba(59,130,246,.15)!important;color:var(--accent)!important}
+.pub-card.drag-chosen{box-shadow:0 8px 32px rgba(59,130,246,.25);border-color:var(--accent)!important;z-index:999}
+.pub-card.dragging{opacity:.4;border:2px dashed var(--accent)!important}
+
+.pub-thumb{height:160px;position:relative;overflow:hidden;background:var(--surface2);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.pub-thumb img,.pub-thumb video{width:100%;height:100%;object-fit:cover}
+.pub-type-badge{position:absolute;top:10px;left:10px;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;letter-spacing:.5px;text-transform:uppercase;backdrop-filter:blur(8px)}
+.badge-image{background:rgba(59,130,246,.8);color:#fff}
+.badge-video{background:rgba(239,68,68,.8);color:#fff}
+.badge-text{background:rgba(99,102,241,.8);color:#fff}
+.badge-embed{background:rgba(20,184,166,.8);color:#fff}
+.status-pill{font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;letter-spacing:.5px;backdrop-filter:blur(8px)}
+.status-pill.active{background:rgba(34,197,94,.8);color:#fff}
+.status-pill.inactive{background:rgba(100,116,139,.7);color:#fff}
+.pub-body{padding:16px;flex:1;display:flex;flex-direction:column;gap:8px}
+.pub-title{font-weight:700;font-size:15px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pub-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.meta-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--muted2);background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px}
+.pub-footer{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:1000;padding:20px}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);width:100%;max-width:580px;max-height:90vh;overflow-y:auto;animation:slideUp .25s ease}
+@keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.modal-header{padding:24px 24px 0;display:flex;align-items:center;justify-content:space-between}
+.modal-title{font-family:'Syne',sans-serif;font-size:20px;font-weight:800}
+.modal-body{padding:24px;display:flex;flex-direction:column;gap:16px}
+.modal-footer{padding:0 24px 24px;display:flex;gap:10px;justify-content:flex-end}
+.form-group{display:flex;flex-direction:column;gap:6px}
+.form-label{font-size:13px;font-weight:600;color:var(--muted2)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.form-control{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:10px 14px;color:var(--text);font-size:14px;font-family:'Inter',sans-serif;outline:none;transition:border-color .15s;width:100%}
+.form-control:focus{border-color:var(--accent)}
+.form-control::placeholder{color:var(--muted)}
+textarea.form-control{resize:vertical;min-height:80px}
+.form-select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%2364748b' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;background-size:16px;padding-right:40px}
+.upload-zone{border:2px dashed var(--border2);border-radius:var(--radius);padding:28px;text-align:center;cursor:pointer;transition:all .2s;position:relative}
+.upload-zone:hover,.upload-zone.dragover{border-color:var(--accent);background:rgba(59,130,246,.05)}
+.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.upload-preview{display:none;margin-top:12px;border-radius:10px;overflow:hidden;max-height:180px}
+.upload-preview img,.upload-preview video{width:100%;max-height:180px;object-fit:contain}
+.upload-preview.show{display:block}
+.color-row{display:flex;gap:12px}
+.color-pick{display:flex;align-items:center;gap:8px}
+.color-pick input[type=color]{width:36px;height:36px;border-radius:8px;border:2px solid var(--border2);cursor:pointer;padding:2px;background:none}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:2px 0}
+.toggle-label{font-size:14px;font-weight:500}
+.toggle{position:relative;display:inline-block;width:44px;height:24px}
+.toggle input{opacity:0;width:0;height:0;position:absolute}
+.toggle-track{position:absolute;inset:0;background:var(--surface2);border-radius:12px;border:1px solid var(--border2);transition:all .2s;cursor:pointer}
+.toggle input:checked+.toggle-track{background:var(--accent);border-color:var(--accent)}
+.toggle-track::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;background:#fff;border-radius:50%;transition:transform .2s}
+.toggle input:checked+.toggle-track::after{transform:translateX(20px)}
+.date-range-block{display:flex;flex-direction:column;gap:12px}
+.date-range-block.hidden{display:none}
+.empty{text-align:center;padding:60px 20px;color:var(--muted2)}
+.empty-icon{font-size:56px;margin-bottom:16px;opacity:.6}
+.empty-text{font-size:16px;font-weight:600;color:var(--muted2);margin-bottom:8px}
+.toast-stack{position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;gap:8px;z-index:9999;pointer-events:none}
+.toast{display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:10px;font-size:13.5px;font-weight:500;min-width:240px;pointer-events:auto;animation:toastIn .3s ease;border:1px solid}
+.toast.success{background:rgba(22,163,74,.15);border-color:rgba(34,197,94,.3);color:var(--success)}
+.toast.error{background:rgba(220,38,38,.15);border-color:rgba(239,68,68,.3);color:var(--danger)}
+.toast.info{background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.3);color:var(--accent)}
+@keyframes toastIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+.view{display:none}
+.view.active{display:flex;flex-direction:column;gap:24px}
+
+/* ── USERS TABLE ── */
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+th{padding:12px 16px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;background:var(--surface2);text-align:left;white-space:nowrap}
+td{padding:14px 16px;font-size:13.5px;border-top:1px solid var(--border);vertical-align:middle}
+tr:hover td{background:rgba(255,255,255,.02)}
+.role-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.4px}
+.role-admin{background:rgba(99,102,241,.15);color:var(--accent2);border:1px solid rgba(99,102,241,.3)}
+.role-editor{background:rgba(59,130,246,.1);color:var(--accent);border:1px solid rgba(59,130,246,.2)}
+.blocked-badge{background:rgba(239,68,68,.1);color:var(--danger);border:1px solid rgba(239,68,68,.2);font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px}
+
+/* ── LOGS TABLE ── */
+.log-action{font-family:monospace;font-size:12px;background:var(--surface2);padding:2px 8px;border-radius:4px;color:var(--muted2)}
+.log-action.CREATE{color:#34d399}.log-action.UPDATE{color:var(--warning)}.log-action.DELETE{color:var(--danger)}.log-action.LOGIN{color:var(--accent)}.log-action.BLOCK{color:var(--danger)}.log-action.UNBLOCK{color:var(--success)}
+
+/* ── SETTINGS ── */
+.settings-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px}
+.settings-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+
+/* ── RESPONSIVE ── */
+/* ── TABLET ── */
+@media(max-width:900px){
+  .stats-row{grid-template-columns:repeat(2,1fr)}
+  .pub-grid{grid-template-columns:repeat(2,1fr)}
+}
+
+/* ── MOBILE ── */
+@media(max-width:720px){
+  :root{--sidebar:0px;--header:56px}
+  .shell{grid-template-columns:1fr;grid-template-rows:var(--header) 1fr}
+  .sidebar{position:fixed;inset:0 auto 0 0;width:260px;z-index:500;transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0)}
+  .sidebar-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:499;display:none}
+  .sidebar-overlay.open{display:block}
+  .hamburger{display:flex;align-items:center}
+  .form-row{grid-template-columns:1fr}
+  .topbar{padding:0 12px;gap:8px}
+  .main{padding:12px;gap:12px}
+
+  /* Stats: 2 columnas en móvil */
+  .stats-row{grid-template-columns:repeat(2,1fr);gap:8px}
+  .stat-card{padding:12px;gap:10px}
+  .stat-val{font-size:22px}
+  .stat-icon{width:38px;height:38px;font-size:18px}
+
+  /* Filtros: apilados en columna */
+  .section-header{flex-direction:column;align-items:stretch;gap:8px}
+  .section-header > div:last-child{
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .section-header select,
+  .section-header input[type=date]{
+    width:100%!important;
+  }
+  .section-header .btn{width:100%;justify-content:center}
+
+  /* Búsqueda en topbar */
+  .search-box{display:none}
+  .search-box input{width:120px}
+
+  /* Cards: 1 columna */
+  .pub-grid{grid-template-columns:1fr;gap:10px}
+
+  /* Topbar: ocultar botón nueva pub en pantallas muy pequeñas */
+  #btnNewPub{font-size:12px;padding:7px 10px}
+  #btnNewPub span{display:none}
+}
+
+/* ── BÚSQUEDA MÓVIL ── */
+@media(max-width:720px){
+  #mobileSearch{ display:block!important }
+}
+
+/* ── MÓVIL PEQUEÑO ── */
+@media(max-width:400px){
+  .stats-row{grid-template-columns:1fr}
+  .stat-card{padding:10px}
+  .topbar-title{font-size:16px}
+  #btnNewPub{padding:6px 10px;font-size:12px}
+  .pub-footer{flex-wrap:wrap;gap:6px}
+}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:10px}
+</style>
+</head>
+<body>
+
+<!-- ── LOGIN ────────────────────────────────────────────────── -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="login-icon">📡</div>
+      <div class="login-title">BroadcastOS</div>
+      <div class="login-sub">Inicia sesión para continuar</div>
+    </div>
+    <div class="login-form">
+      <div class="login-error" id="loginError"></div>
+      <div class="form-group">
+        <label class="form-label">Usuario o correo electrónico</label>
+        <input class="form-control" type="text" id="loginUser" placeholder="admin o correo@empresa.com" autocomplete="username"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Contraseña</label>
+        <input class="form-control" type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password"/>
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px" onclick="doLogin()" id="loginBtn">
+        Iniciar sesión
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── SHELL ─────────────────────────────────────────────────── -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+<div class="shell" id="appShell" style="display:none">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark">📡</div>
+      <div>
+        <div class="logo-text">BroadcastOS</div>
+        <div class="logo-sub">Panel Administrativo</div>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">Principal</div>
+      <button class="nav-item active" onclick="showView('publications')" data-view="publications">
+        <span class="icon">🖼️</span> Publicaciones
+      </button>
+      <button class="nav-item" onclick="showView('preview')" data-view="preview">
+        <span class="icon">📺</span> Vista Previa TV
+      </button>
+      <div class="nav-section admin-only">Administración</div>
+      <button class="nav-item admin-only" onclick="showView('users')" data-view="users">
+        <span class="icon">👥</span> Usuarios
+      </button>
+      <button class="nav-item admin-only" onclick="showView('logs')" data-view="logs">
+        <span class="icon">📋</span> Actividad
+      </button>
+      <div class="nav-section">Sistema</div>
+      <button class="nav-item admin-only" onclick="showView('settings')" data-view="settings">
+        <span class="icon">⚙️</span> Configuración
+      </button>
+
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-card">
+        <div class="user-avatar" id="userAvatar">A</div>
+        <div>
+          <div class="user-name" id="userNameDisplay">—</div>
+          <div class="user-role" id="userRoleDisplay">—</div>
+        </div>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
+          <div class="status-dot"></div>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:center" onclick="doLogout()">
+        🚪 Cerrar sesión
+      </button>
+    </div>
+  </aside>
+
+  <header class="topbar">
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="hamburger" onclick="toggleSidebar()">☰</button>
+      <div class="topbar-title" id="topbarTitle">Publicaciones</div>
+    </div>
+    <div class="topbar-actions">
+      <div class="search-box" id="searchBox">
+        <span>🔍</span>
+        <input type="text" placeholder="Buscar…" id="searchInput" oninput="filterPublications()"/>
+      </div>
+      <button class="btn btn-ghost btn-icon" onclick="toggleTheme()" id="themeBtn" title="Cambiar tema" style="font-size:18px">🌙</button>
+      <button class="btn btn-primary" onclick="openPubModal()" id="btnNewPub"><span>＋</span> Nueva</button>
+    </div>
+  </header>
+  <!-- Búsqueda móvil -->
+  <div id="mobileSearch" style="display:none;padding:8px 12px;background:var(--surface);border-bottom:1px solid var(--border)">
+    <div class="search-box" style="display:flex;width:100%">
+      <span>🔍</span>
+      <input type="text" placeholder="Buscar publicaciones…" id="searchInputMobile" oninput="document.getElementById('searchInput').value=this.value;filterPublications()" style="flex:1"/>
+    </div>
+  </div>
+
+  <main class="main" id="mainContent">
+
+    <!-- PUBLICATIONS -->
+    <div class="view active" id="view-publications">
+      <div class="stats-row" style="grid-template-columns:repeat(3,1fr)">
+        <div class="stat-card"><div class="stat-icon blue">📋</div><div><div class="stat-val" id="statTotal">0</div><div class="stat-lbl">Total</div></div></div>
+        <div class="stat-card"><div class="stat-icon green">✅</div><div><div class="stat-val" id="statActive">0</div><div class="stat-lbl">Activas ahora</div></div></div>
+        <div class="stat-card" style="gap:0;flex-direction:column;align-items:stretch;padding:16px">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+            <div class="stat-icon yellow" style="flex-shrink:0">♾️</div>
+            <div><div class="stat-val" id="statIndef">0</div><div class="stat-lbl">Indefinidas</div></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;border-top:1px solid var(--border);padding-top:10px">
+            <div style="text-align:center">
+              <div style="font-size:16px;font-weight:700;color:var(--accent)" id="statWithDate">0</div>
+              <div style="font-size:10px;color:var(--muted2)">Con fecha</div>
+            </div>
+            <div style="text-align:center;border-left:1px solid var(--border);border-right:1px solid var(--border)">
+              <div style="font-size:16px;font-weight:700;color:var(--success)" id="statVigente">0</div>
+              <div style="font-size:10px;color:var(--muted2)">Vigentes</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:16px;font-weight:700;color:var(--danger)" id="statVencidas">0</div>
+              <div style="font-size:10px;color:var(--muted2)">Vencidas</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="stat-card" id="timerCard" style="display:flex;align-items:center;gap:16px">
+        <div class="stat-icon purple">🕐</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:11px;color:var(--muted2);margin-bottom:4px">Tiempo total en pantalla hoy</div>
+          <div style="display:flex;gap:12px;align-items:baseline;flex-wrap:wrap">
+            <div><span class="stat-val" id="timerH">0</span><span style="font-size:13px;color:var(--muted2);margin-left:3px">h</span></div>
+            <div><span class="stat-val" id="timerM">0</span><span style="font-size:13px;color:var(--muted2);margin-left:3px">min</span></div>
+            <div><span class="stat-val" id="timerS">0</span><span style="font-size:13px;color:var(--muted2);margin-left:3px">seg</span></div>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px" id="timerDetail">—</div>
+        </div>
+      </div>
+      <div class="section-header">
+        <div class="section-title">Publicaciones</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <select class="form-control form-select" style="width:auto;padding:8px 36px 8px 12px;font-size:13px" onchange="filterPublications()" id="filterSelect">
+            <option value="">Todos los tipos</option>
+            <option value="active">Activas ahora</option>
+            <option value="inactive">Inactivas</option>
+            <option value="image">Imágenes</option>
+            <option value="video">Videos</option>
+            <option value="text">Texto</option>
+            <option value="indefinite">Indefinidas</option>
+          </select>
+          <input type="date" class="form-control" id="filterFrom" style="width:auto;padding:8px 12px;font-size:13px" onchange="filterPublications()" title="Desde fecha"/>
+          <input type="date" class="form-control" id="filterTo" style="width:auto;padding:8px 12px;font-size:13px" onchange="filterPublications()" title="Hasta fecha"/>
+          <button class="btn btn-ghost btn-sm" onclick="clearFilters()" title="Limpiar filtros">✕ Limpiar</button>
+
+        </div>
+      </div>
+
+      <div class="pub-grid" id="pubGrid"></div>
+      <div class="empty" id="emptyState" style="display:none">
+        <div class="empty-icon">📭</div>
+        <div class="empty-text">Sin publicaciones</div>
+      </div>
+    </div>
+
+    <!-- PREVIEW -->
+    <div class="view" id="view-preview">
+      <div class="section-header">
+        <div class="section-title">Vista Previa Smart TV</div>
+        <div style="display:flex;gap:8px">
+          <a href="/tv" target="_blank" class="btn btn-primary">🔗 Abrir TV</a>
+          <button class="btn btn-ghost" onclick="forceRefreshTV()">↺ Actualizar</button>
+        </div>
+      </div>
+      <div style="max-width:900px">
+        <div style="aspect-ratio:16/9;background:var(--surface2);border-radius:10px;border:2px solid var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px">
+          <div style="font-size:56px">📺</div>
+          <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:var(--text)">Vista Previa del Smart TV</div>
+          <div style="font-size:14px;color:var(--muted2);text-align:center;max-width:400px;line-height:1.6">
+            Abre el TV en una pestaña separada para ver la transmisión en vivo sin interferir con el audio del panel.
+          </div>
+          <div style="display:flex;gap:10px">
+            <a href="/tv" target="_blank" class="btn btn-primary" style="text-decoration:none">
+              🔗 Abrir TV en nueva pestaña
+            </a>
+            <button class="btn btn-ghost" onclick="forceRefreshTV()">↺ Forzar actualización</button>
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-top:8px">
+            URL directa: <code style="background:var(--surface);padding:3px 8px;border-radius:4px;border:1px solid var(--border)">localhost:3000/tv</code>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- USERS -->
+    <div class="view" id="view-users">
+      <div class="section-header">
+        <div class="section-title">Usuarios</div>
+        <button class="btn btn-primary" onclick="openUserModal()">＋ Nuevo usuario</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Usuario</th><th>Email</th><th>Rol</th>
+              <th>Último acceso</th><th>Estado</th><th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="usersTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- LOGS -->
+    <div class="view" id="view-logs">
+      <div class="section-header">
+        <div class="section-title">Registro de Actividad</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select class="form-control form-select" id="logUserFilter" style="width:auto;padding:8px 36px 8px 12px;font-size:13px" onchange="loadLogs()">
+            <option value="">Todos los usuarios</option>
+          </select>
+          <button class="btn btn-ghost" onclick="loadLogs()">↺ Refrescar</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Detalle</th><th>IP</th></tr>
+          </thead>
+          <tbody id="logsTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="view" id="view-settings">
+      <div class="section-title">Configuración</div>
+      <div class="settings-card">
+        <div class="settings-title">⚙️ General</div>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="form-group">
+            <label class="form-label">Duración predeterminada (seg)</label>
+            <input type="number" class="form-control" id="cfgDuration" min="2" max="300" value="8"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Título del sistema</label>
+            <input type="text" class="form-control" id="cfgTitle" placeholder="BroadcastOS"/>
+          </div>
+          <div class="toggle-row">
+            <span class="toggle-label">Mostrar reloj en TV</span>
+            <label class="toggle"><input type="checkbox" id="cfgClock" checked/><div class="toggle-track"></div></label>
+          </div>
+          <div class="toggle-row">
+            <span class="toggle-label">Mostrar barra inferior en TV</span>
+            <label class="toggle"><input type="checkbox" id="cfgBar" checked/><div class="toggle-track"></div></label>
+          </div>
+          <button class="btn btn-primary" onclick="saveSettings()" style="align-self:flex-start">Guardar</button>
+        </div>
+      </div>
+      <div class="settings-card">
+        <div class="settings-title">📡 URLs de acceso</div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="form-group">
+            <label class="form-label">Vista Smart TV</label>
+            <div style="display:flex;gap:8px"><input type="text" class="form-control" id="tvUrl" readonly/><button class="btn btn-ghost" onclick="copyUrl('tvUrl')">📋</button></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Panel Administrativo</label>
+            <div style="display:flex;gap:8px"><input type="text" class="form-control" id="adminUrl" readonly/><button class="btn btn-ghost" onclick="copyUrl('adminUrl')">📋</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MODAL PUBLICACIÓN -->
+<div class="modal-overlay" id="pubModalOverlay" >
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="pubModalTitle">Nueva Publicación</div>
+      <button class="btn btn-ghost btn-icon" onclick="closePubModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editId"/>
+      <div class="form-group">
+        <label class="form-label">Tipo</label>
+        <select class="form-control form-select" id="fType" onchange="onTypeChange()">
+          <option value="image">🖼️ Imagen</option>
+          <option value="video">🎬 Video</option>
+          <option value="text">💬 Solo texto</option>
+          <option value="embed">🌐 Web / YouTube / Stream</option>
+        </select>
+      </div>
+      <div class="form-group" id="mediaGroup">
+        <label class="form-label">Archivo</label>
+        <div class="upload-zone" id="uploadZone">
+          <input type="file" id="fMedia" accept="image/*,video/*" onchange="previewMedia()"/>
+          <div style="font-size:32px">📁</div>
+          <div style="font-size:14px;font-weight:500;margin-top:6px">Arrastra o haz clic</div>
+          <div style="font-size:12px;color:var(--muted2);margin-top:4px">JPG, PNG, GIF, MP4, WebM — máx. 500 MB</div>
+        </div>
+        <div class="upload-preview" id="uploadPreview"></div>
+        <div id="currentMediaNote" style="font-size:12px;color:var(--muted2);display:none"></div>
+      </div>
+      <div class="form-group" id="colorGroup" style="display:none">
+        <label class="form-label">Colores</label>
+        <div class="color-row">
+          <div class="color-pick"><input type="color" id="fBgColor" value="#0a0a1a"/><label style="font-size:13px;color:var(--muted2)">Fondo</label></div>
+          <div class="color-pick"><input type="color" id="fTextColor" value="#ffffff"/><label style="font-size:13px;color:var(--muted2)">Texto</label></div>
+        </div>
+      </div>
+      <!-- URL embed -->
+      <div class="form-group" id="embedGroup" style="display:none">
+        <label class="form-label">URL del sitio web o video *</label>
+        <input type="url" class="form-control" id="fEmbedUrl" placeholder="https://www.youtube.com/watch?v=... o https://bloomberg.com/live"/>
+        <div style="font-size:11px;color:var(--muted2);margin-top:4px">
+          YouTube, Bloomberg Live, streams u otras páginas web. Para YouTube pega el link normal, se convierte automáticamente.
+        </div>
+      </div>
+
+      <!-- Horario (solo para embed) -->
+      <div class="form-group" id="scheduleGroup" style="display:none">
+        <label class="form-label">⏰ Horario de visualización (opcional)</label>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Hora inicio</label>
+            <input type="time" class="form-control" id="fTimeStart" onchange="onScheduleChange()"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Hora fin</label>
+            <input type="time" class="form-control" id="fTimeEnd" onchange="onScheduleChange()"/>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--muted2)">
+          Si configuras horario, esta publicación solo aparece en el TV durante ese rango de horas todos los días.
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Título *</label>
+        <input type="text" class="form-control" id="fTitle" placeholder="Título" maxlength="120"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Subtítulo</label>
+        <input type="text" class="form-control" id="fSubtitle" placeholder="Subtítulo (opcional)" maxlength="160"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descripción</label>
+        <textarea class="form-control" id="fDescription" rows="3" maxlength="500"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Duración (seg)</label>
+          <input type="number" class="form-control" id="fDuration" value="8" min="2" max="300"/>
+        </div>
+        <div class="form-group" style="justify-content:flex-end;padding-top:22px">
+          <div class="toggle-row">
+            <span class="toggle-label">Activa</span>
+            <label class="toggle"><input type="checkbox" id="fActive" checked/><div class="toggle-track"></div></label>
+          </div>
+        </div>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Duración indefinida</span>
+        <label class="toggle"><input type="checkbox" id="fIndefinite" checked onchange="toggleDateRange()"/><div class="toggle-track"></div></label>
+      </div>
+      <div class="date-range-block hidden" id="dateRangeBlock">
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Inicio</label><input type="datetime-local" class="form-control" id="fStartDate"/></div>
+          <div class="form-group"><label class="form-label">Fin</label><input type="datetime-local" class="form-control" id="fEndDate"/></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closePubModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="savePublication()" id="savePubBtn">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL USUARIO -->
+<div class="modal-overlay" id="userModalOverlay" >
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="userModalTitle">Nuevo Usuario</div>
+      <button class="btn btn-ghost btn-icon" onclick="closeUserModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editUserId"/>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Usuario *</label>
+          <input type="text" class="form-control" id="fuUsername" placeholder="nombre_usuario" maxlength="80"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Rol</label>
+          <select class="form-control form-select" id="fuRole">
+            <option value="editor">Editor</option>
+            <option value="admin">Administrador</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" class="form-control" id="fuEmail" placeholder="correo@empresa.com"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label" id="passLabel">Contraseña *</label>
+        <input type="password" class="form-control" id="fuPassword" placeholder="Mínimo 6 caracteres"/>
+        <div id="passHint" style="font-size:12px;color:var(--muted2);display:none">Deja vacío para no cambiar la contraseña</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeUserModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveUser()" id="saveUserBtn">Crear usuario</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-stack" id="toastStack"></div>
+
+<script>
+const socket = io();
+let publications = [], users = [], currentUser = null;
+let editingPubId = null, editingUserId = null;
+let token = localStorage.getItem('bos_token');
+
+// ── SOCKET ────────────────────────────────────────────
+socket.on('publications:update', loadPublications);
+socket.on('users:update', () => { if(currentUser?.role==='admin') loadUsers(); });
+socket.on('settings:update', applySettings);
+
+// Countdown eliminado
+
+// ── LOGIN ─────────────────────────────────────────────
+document.getElementById('loginPass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+document.getElementById('loginUser').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+
+async function doLogin() {
+  const username = document.getElementById('loginUser').value.trim();
+  const password = document.getElementById('loginPass').value;
+  const err = document.getElementById('loginError');
+  const btn = document.getElementById('loginBtn');
+  err.classList.remove('show');
+  if(!username||!password){ err.textContent='Completa todos los campos'; err.classList.add('show'); return; }
+  btn.disabled=true; btn.textContent='Verificando…';
+  try {
+    const res = await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
+    const data = await res.json();
+    if(!res.ok){ err.textContent=data.error||'Error al iniciar sesión'; err.classList.add('show'); return; }
+    token = data.token;
+    localStorage.setItem('bos_token',token);
+    currentUser = data.user;
+    enterApp();
+  } catch(e){ err.textContent='Error de conexión'; err.classList.add('show'); }
+  finally{ btn.disabled=false; btn.textContent='Iniciar sesión'; }
+}
+
+async function checkToken() {
+  if(!token) return false;
+  try {
+    const res = await fetch('/api/auth/me',{headers:{Authorization:'Bearer '+token}});
+    if(!res.ok){ localStorage.removeItem('bos_token'); return false; }
+    currentUser = await res.json();
+    return true;
+  } catch{ return false; }
+}
+
+function enterApp() {
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('appShell').style.display='grid';
+  document.getElementById('userNameDisplay').textContent = currentUser.username;
+  document.getElementById('userRoleDisplay').textContent = currentUser.role==='admin' ? '👑 Administrador' : '✏️ Editor';
+  document.getElementById('userAvatar').textContent = currentUser.username[0].toUpperCase();
+
+  // Mostrar secciones de admin
+  if(currentUser.role==='admin'){
+    document.querySelectorAll('.admin-only').forEach(el=>el.style.display='flex');
+    document.querySelectorAll('.nav-section.admin-only').forEach(el=>el.style.display='block');
+  }
+
+  document.getElementById('tvUrl').value = location.origin+'/tv';
+  document.getElementById('adminUrl').value = location.origin+'/admin';
+  init();
+}
+
+function doLogout() {
+  localStorage.removeItem('bos_token');
+  token=null; currentUser=null;
+  document.getElementById('appShell').style.display='none';
+  document.getElementById('loginScreen').style.display='flex';
+  document.getElementById('loginUser').value='';
+  document.getElementById('loginPass').value='';
+}
+
+// ── INIT ──────────────────────────────────────────────
+async function init() {
+  await loadPublications();
+  await loadSettings();
+  if(currentUser.role==='admin') { await loadUsers(); await loadLogs(); }
+}
+
+function apiHeaders() {
+  return { 'Authorization':'Bearer '+token };
+}
+
+// ── PUBLICATIONS ──────────────────────────────────────
+async function loadPublications() {
+  const res = await fetch('/api/publications',{headers:apiHeaders()});
+  if(res.status===401){ doLogout(); return; }
+  publications = await res.json();
+  renderGrid(); renderStats();
+}
+
+function renderStats() {
+  const now = new Date();
+  const active = publications.filter(p=>{
+    if(!p.active) return false;
+    if(p.indefinite) return true;
+    const s=p.startDate?new Date(p.startDate):null, e=p.endDate?new Date(p.endDate):null;
+    if(s&&now<s) return false; if(e&&now>e) return false; return true;
+  });
+  const now2 = new Date();
+  const indef      = publications.filter(p => p.indefinite);
+  const withDate   = publications.filter(p => !p.indefinite);
+  const vigentes   = withDate.filter(p => {
+    const s = p.startDate ? new Date(p.startDate) : null;
+    const e = p.endDate   ? new Date(p.endDate)   : null;
+    if(s && now2 < s) return false;
+    if(e && now2 > e) return false;
+    return true;
+  });
+  const vencidas = withDate.filter(p => {
+    const e = p.endDate ? new Date(p.endDate) : null;
+    return e && now2 > e;
+  });
+
+  document.getElementById('statTotal').textContent    = publications.length;
+  document.getElementById('statActive').textContent   = active.length;
+  document.getElementById('statIndef').textContent    = indef.length;
+  document.getElementById('statWithDate').textContent = withDate.length;
+  document.getElementById('statVigente').textContent  = vigentes.length;
+  document.getElementById('statVencidas').textContent = vencidas.length;
+  calcDailyTime();
+}
+
+function clearFilters(){
+  document.getElementById('filterSelect').value='';
+  document.getElementById('filterFrom').value='';
+  document.getElementById('filterTo').value='';
+  document.getElementById('searchInput').value='';
+  filterPublications();
+}
+
+async function saveOrder(){
+  const cards = document.querySelectorAll('#pubGrid .pub-card[data-id]');
+  const ids = [...cards].map(c => c.dataset.id);
+  await fetch('/api/publications/reorder',{
+    method:'PATCH',
+    headers:{...apiHeaders(),'Content-Type':'application/json'},
+    body:JSON.stringify({ids})
+  });
+  toast('Orden guardado ✓','success');
+}
+
+function renderGrid() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const f = document.getElementById('filterSelect').value;
+  const from = document.getElementById('filterFrom').value ? new Date(document.getElementById('filterFrom').value) : null;
+  const to   = document.getElementById('filterTo').value   ? new Date(document.getElementById('filterTo').value + 'T23:59:59') : null;
+  const now = new Date();
+  const isActive = p => {
+    if(!p.active) return false; if(p.indefinite) return true;
+    const s=p.startDate?new Date(p.startDate):null, e=p.endDate?new Date(p.endDate):null;
+    if(s&&now<s) return false; if(e&&now>e) return false; return true;
+  };
+  let list = publications.filter(p=>{
+    if(q && !p.title.toLowerCase().includes(q) && !(p.subtitle||'').toLowerCase().includes(q)) return false;
+    if(f==='active') return isActive(p);
+    if(f==='inactive') return !p.active;
+    if(f==='indefinite') return p.indefinite;
+    if(f==='image'||f==='video'||f==='text') return p.type===f;
+    // Filtro por rango de fecha (aplica a publicaciones con fechas)
+    if(from||to){
+      if(p.indefinite) return true; // indefinidas siempre pasan
+      const ps = p.startDate ? new Date(p.startDate) : null;
+      const pe = p.endDate   ? new Date(p.endDate)   : null;
+      if(from && pe && pe < from) return false;
+      if(to   && ps && ps > to)   return false;
+    }
+    return true;
+  });
+  const grid=document.getElementById('pubGrid'), empty=document.getElementById('emptyState');
+  if(!list.length){ grid.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  const tc={image:'badge-image',video:'badge-video',text:'badge-text',embed:'badge-embed'};
+  const tl={image:'Imagen',video:'Video',text:'Texto',embed:'Web/Stream'};
+  grid.innerHTML=list.map(p=>{
+    const act=isActive(p);
+    let th='';
+    if(p.type==='image'&&p.mediaUrl) th=`<img src="${p.mediaUrl}" alt="" loading="lazy"/>`;
+    else if(p.type==='video'&&p.mediaUrl) th=`<video src="${p.mediaUrl}" muted preload="metadata"></video>`;
+    else if(p.type==='embed') th=`<div style="display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--muted2)"><div style="font-size:32px">🌐</div><div style="font-size:10px;text-align:center;max-width:90%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.embedUrl||''}</div>${p.timeStart?`<div style="font-size:10px;color:var(--accent)">⏰ ${p.timeStart} - ${p.timeEnd||'?'}</div>`:''}</div>`;
+    else th=`<div style="font-size:36px;color:var(--muted)">💬</div>`;
+    const date = p.indefinite?'♾️ Indefinida':`${p.startDate?fmtD(p.startDate):'?'} → ${p.endDate?fmtD(p.endDate):'?'}`;
+    return `<div class="pub-card ${!p.active?'inactive':''}" data-id="${p.id}">
+      <div class="pub-thumb" style="${p.type==='text'?'background:'+p.bgColor:''}">
+        ${th}
+        <span class="pub-type-badge ${tc[p.type]}">${tl[p.type]}</span>
+        <span style="position:absolute;top:10px;right:10px"><span class="status-pill ${act?'active':'inactive'}">${act?'En pantalla':'Inactiva'}</span></span>
+      </div>
+      <div class="pub-body">
+        <div class="pub-title">${esc(p.title)}</div>
+        <div class="pub-meta"><span class="meta-chip">⏱️ ${p.duration}s</span><span class="meta-chip">📅 ${date}</span></div>
+      </div>
+      <div class="pub-footer">
+        <button class="btn btn-ghost btn-sm" onclick="editPublication('${p.id}')">✏️ Editar</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleActive('${p.id}')">${p.active?'⏸️':'▶️'}</button>
+        <button class="btn btn-danger btn-sm" onclick="deletePub('${p.id}')">🗑️</button>
+        <button class="drag-handle btn btn-ghost btn-sm" title="Arrastra para reordenar" style="margin-left:auto;cursor:grab;padding:6px 10px">
+          <svg width="12" height="18" viewBox="0 0 12 18" fill="currentColor" style="display:block;opacity:.6">
+            <circle cx="3" cy="3" r="1.8"/><circle cx="9" cy="3" r="1.8"/>
+            <circle cx="3" cy="9" r="1.8"/><circle cx="9" cy="9" r="1.8"/>
+            <circle cx="3" cy="15" r="1.8"/><circle cx="9" cy="15" r="1.8"/>
+          </svg>
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+  // Inicializar drag & drop después de renderizar
+  setTimeout(initDragDrop, 50);
+}
+function filterPublications(){ renderGrid(); }
+function fmtD(d){ return new Date(d).toLocaleDateString('es-PE',{day:'2-digit',month:'short'}); }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── PUB MODAL ─────────────────────────────────────────
+function openPubModal(pub){
+  editingPubId = pub?pub.id:null;
+  document.getElementById('pubModalTitle').textContent = pub?'Editar Publicación':'Nueva Publicación';
+  document.getElementById('savePubBtn').textContent = pub?'Guardar cambios':'Guardar';
+  document.getElementById('editId').value = pub?pub.id:'';
+  document.getElementById('fType').value = pub?pub.type:'image';
+  document.getElementById('fTitle').value = pub?pub.title:'';
+  document.getElementById('fSubtitle').value = pub?(pub.subtitle||''):'';
+  document.getElementById('fDescription').value = pub?(pub.description||''):'';
+  document.getElementById('fDuration').value = pub?pub.duration:8;
+  document.getElementById('fActive').checked = pub?pub.active:true;
+  document.getElementById('fIndefinite').checked = pub?pub.indefinite:true;
+  document.getElementById('fBgColor').value = pub?pub.bgColor:'#0a0a1a';
+  document.getElementById('fTextColor').value = pub?pub.textColor:'#ffffff';
+  document.getElementById('fStartDate').value = pub&&pub.startDate?pub.startDate.slice(0,16):'';
+  document.getElementById('fEndDate').value = pub&&pub.endDate?pub.endDate.slice(0,16):'';
+  document.getElementById('fMedia').value='';
+  document.getElementById('fEmbedUrl').value  = pub ? (pub.embedUrl||'') : '';
+  document.getElementById('fTimeStart').value = pub ? (pub.timeStart||'') : '';
+  document.getElementById('fTimeEnd').value   = pub ? (pub.timeEnd||'') : '';
+  document.getElementById('uploadPreview').innerHTML='';
+  document.getElementById('uploadPreview').classList.remove('show');
+  const note=document.getElementById('currentMediaNote');
+  if(pub&&pub.mediaUrl){ note.textContent='Archivo actual: '+pub.mediaUrl.split('/').pop()+' — sube uno nuevo para reemplazar'; note.style.display='block'; }
+  else note.style.display='none';
+  onTypeChange(); toggleDateRange();
+  document.getElementById('pubModalOverlay').classList.add('open');
+}
+function closePubModal(){ document.getElementById('pubModalOverlay').classList.remove('open'); }
+// Modal solo se cierra con botón X o Cancelar
+function onTypeChange(){
+  const t=document.getElementById('fType').value;
+  document.getElementById('mediaGroup').style.display    = (t==='text'||t==='embed') ? 'none' : 'flex';
+  document.getElementById('colorGroup').style.display    = t==='text' ? 'flex' : 'none';
+  document.getElementById('embedGroup').style.display    = t==='embed' ? 'flex' : 'none';
+  document.getElementById('scheduleGroup').style.display = t==='embed' ? 'flex' : 'none';
+  onScheduleChange();
+}
+
+function onScheduleChange(){
+  const t = document.getElementById('fType').value;
+  const hasSchedule = t==='embed' && (
+    document.getElementById('fTimeStart').value || 
+    document.getElementById('fTimeEnd').value
+  );
+  const durGroup = document.getElementById('fDuration').closest('.form-row') || document.getElementById('fDuration').parentElement;
+  if(durGroup) durGroup.style.opacity = hasSchedule ? '.35' : '1';
+  if(durGroup) durGroup.style.pointerEvents = hasSchedule ? 'none' : 'auto';
+  if(hasSchedule) {
+    document.getElementById('fDuration').value = 999;
+  }
+}
+function toggleDateRange(){
+  document.getElementById('fIndefinite').checked
+    ? document.getElementById('dateRangeBlock').classList.add('hidden')
+    : document.getElementById('dateRangeBlock').classList.remove('hidden');
+}
+function previewMedia(){
+  const file=document.getElementById('fMedia').files[0]; if(!file) return;
+  const url=URL.createObjectURL(file);
+  const prev=document.getElementById('uploadPreview');
+  prev.innerHTML=file.type.startsWith('image/')?`<img src="${url}"/>`:`<video src="${url}" controls></video>`;
+  prev.classList.add('show');
+  document.getElementById('fType').value=file.type.startsWith('video/')?'video':'image';
+  onTypeChange();
+}
+async function savePublication(){
+  const title=document.getElementById('fTitle').value.trim();
+  if(!title){ toast('El título es obligatorio','error'); return; }
+  const type=document.getElementById('fType').value;
+  const mediaFile=document.getElementById('fMedia').files[0];
+  const embedUrl=document.getElementById('fEmbedUrl').value.trim();
+  if(!editingPubId&&type==='embed'&&!embedUrl){ toast('Ingresa la URL del sitio web o video','error'); return; }
+  if(!editingPubId&&type!=='text'&&type!=='embed'&&!mediaFile){ toast('Selecciona un archivo','error'); return; }
+  const btn=document.getElementById('savePubBtn');
+  btn.disabled=true; btn.textContent='Guardando…';
+  const fd=new FormData();
+  fd.append('title',title);
+  fd.append('subtitle',document.getElementById('fSubtitle').value.trim());
+  fd.append('description',document.getElementById('fDescription').value.trim());
+  fd.append('type',type);
+  fd.append('duration',document.getElementById('fDuration').value);
+  fd.append('active',document.getElementById('fActive').checked?'true':'false');
+  fd.append('indefinite',document.getElementById('fIndefinite').checked?'true':'false');
+  fd.append('bgColor',document.getElementById('fBgColor').value);
+  fd.append('textColor',document.getElementById('fTextColor').value);
+  if(!document.getElementById('fIndefinite').checked){
+    fd.append('startDate',document.getElementById('fStartDate').value);
+    fd.append('endDate',document.getElementById('fEndDate').value);
+  }
+  if(mediaFile) fd.append('media',mediaFile);
+  fd.append('embedUrl',  document.getElementById('fEmbedUrl').value.trim());
+  fd.append('timeStart', document.getElementById('fTimeStart').value);
+  fd.append('timeEnd',   document.getElementById('fTimeEnd').value);
+  try{
+    const url=editingPubId?`/api/publications/${editingPubId}`:'/api/publications';
+    const res=await fetch(url,{method:editingPubId?'PUT':'POST',headers:apiHeaders(),body:fd});
+    if(!res.ok) throw new Error((await res.json()).error);
+    closePubModal(); toast(editingPubId?'Publicación actualizada ✓':'Publicación creada ✓','success');
+    loadPublications();
+  }catch(e){ toast('Error: '+e.message,'error'); }
+  finally{ btn.disabled=false; btn.textContent=editingPubId?'Guardar cambios':'Guardar'; }
+}
+function editPublication(id){ const p=publications.find(x=>x.id===id); if(p) openPubModal(p); }
+async function toggleActive(id){
+  await fetch(`/api/publications/${id}/toggle`,{method:'PATCH',headers:apiHeaders()});
+  loadPublications(); toast('Estado actualizado','info');
+}
+async function deletePub(id){
+  const p=publications.find(x=>x.id===id);
+  if(!confirm(`¿Eliminar "${p?.title}"?`)) return;
+  await fetch(`/api/publications/${id}`,{method:'DELETE',headers:apiHeaders()});
+  loadPublications(); toast('Eliminada','info');
+}
+
+// ── USERS ─────────────────────────────────────────────
+async function loadUsers(){
+  const res=await fetch('/api/users',{headers:apiHeaders()});
+  users=await res.json();
+  renderUsers();
+  // Llenar filtro de logs
+  const sel=document.getElementById('logUserFilter');
+  const cur=sel.value;
+  sel.innerHTML='<option value="">Todos los usuarios</option>'+users.map(u=>`<option value="${u.id}">${u.username}</option>`).join('');
+  sel.value=cur;
+}
+function renderUsers(){
+  document.getElementById('usersTable').innerHTML=users.map(u=>`
+    <tr>
+      <td><strong>${esc(u.username)}</strong></td>
+      <td style="color:var(--muted2)">${esc(u.email||'—')}</td>
+      <td><span class="role-badge role-${u.role}">${u.role==='admin'?'👑 Admin':'✏️ Editor'}</span></td>
+      <td style="color:var(--muted2);font-size:12px">${u.lastLogin?new Date(u.lastLogin).toLocaleString('es-PE'):'Nunca'}</td>
+      <td>${u.active?'<span class="status-pill active">Activo</span>':'<span class="blocked-badge">Bloqueado</span>'}</td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost btn-sm" onclick="openUserModal('${u.id}')">✏️</button>
+          <button class="btn ${u.active?'btn-warning':'btn-ghost'} btn-sm" onclick="toggleUser('${u.id}')">${u.active?'🔒':'🔓'}</button>
+          ${u.id!==currentUser.id?`<button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}')">🗑️</button>`:''}
+        </div>
+      </td>
+    </tr>`).join('');
+}
+function openUserModal(id){
+  const u=id?users.find(x=>x.id===id):null;
+  editingUserId=id||null;
+  document.getElementById('userModalTitle').textContent=u?'Editar Usuario':'Nuevo Usuario';
+  document.getElementById('saveUserBtn').textContent=u?'Guardar cambios':'Crear usuario';
+  document.getElementById('editUserId').value=id||'';
+  document.getElementById('fuUsername').value=u?u.username:'';
+  document.getElementById('fuEmail').value=u?(u.email||''):'';
+  document.getElementById('fuRole').value=u?u.role:'editor';
+  document.getElementById('fuPassword').value='';
+  document.getElementById('passHint').style.display=u?'block':'none';
+  document.getElementById('passLabel').textContent=u?'Contraseña':'Contraseña *';
+  document.getElementById('userModalOverlay').classList.add('open');
+}
+function closeUserModal(){ document.getElementById('userModalOverlay').classList.remove('open'); }
+// Modal usuario solo se cierra con botón X o Cancelar
+async function saveUser(){
+  const username=document.getElementById('fuUsername').value.trim();
+  const password=document.getElementById('fuPassword').value;
+  const role=document.getElementById('fuRole').value;
+  const email=document.getElementById('fuEmail').value.trim();
+  if(!username){ toast('El usuario es obligatorio','error'); return; }
+  if(!editingUserId&&!password){ toast('La contraseña es obligatoria','error'); return; }
+  const btn=document.getElementById('saveUserBtn');
+  btn.disabled=true; btn.textContent='Guardando…';
+  const body={username,email,role};
+  if(password) body.password=password;
+  try{
+    const url=editingUserId?`/api/users/${editingUserId}`:'/api/users';
+    const res=await fetch(url,{method:editingUserId?'PUT':'POST',headers:{...apiHeaders(),'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const data=await res.json();
+    if(!res.ok) throw new Error(data.error);
+    closeUserModal(); toast(editingUserId?'Usuario actualizado ✓':'Usuario creado ✓','success');
+    loadUsers();
+  }catch(e){ toast('Error: '+e.message,'error'); }
+  finally{ btn.disabled=false; btn.textContent=editingUserId?'Guardar cambios':'Crear usuario'; }
+}
+async function toggleUser(id){
+  const u=users.find(x=>x.id===id);
+  if(!confirm(`¿${u.active?'Bloquear':'Desbloquear'} a "${u.username}"?`)) return;
+  const res=await fetch(`/api/users/${id}/toggle`,{method:'PATCH',headers:apiHeaders()});
+  const data=await res.json();
+  toast(data.active?'Usuario desbloqueado':'Usuario bloqueado','info');
+  loadUsers();
+}
+async function deleteUser(id){
+  const u=users.find(x=>x.id===id);
+  if(!confirm(`¿Eliminar permanentemente a "${u.username}"?`)) return;
+  await fetch(`/api/users/${id}`,{method:'DELETE',headers:apiHeaders()});
+  toast('Usuario eliminado','info'); loadUsers();
+}
+
+// ── LOGS ──────────────────────────────────────────────
+async function loadLogs(){
+  const userId=document.getElementById('logUserFilter').value;
+  const url='/api/logs?limit=100'+(userId?'&userId='+userId:'');
+  const res=await fetch(url,{headers:apiHeaders()});
+  const data=await res.json();
+  const actionClass=a=>{ const k=a.split('_')[0]; return k; };
+  document.getElementById('logsTable').innerHTML=(data.rows||[]).map(l=>`
+    <tr>
+      <td style="font-size:12px;color:var(--muted2);white-space:nowrap">${new Date(l.createdAt).toLocaleString('es-PE')}</td>
+      <td><strong>${esc(l.username)}</strong></td>
+      <td><span class="log-action ${actionClass(l.action)}">${l.action}</span></td>
+      <td style="color:var(--muted2);font-size:13px">${esc(l.detail||'—')}</td>
+      <td style="font-size:12px;color:var(--muted)">${esc(l.ip||'—')}</td>
+    </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:32px">Sin registros</td></tr>';
+}
+
+// ── SETTINGS ──────────────────────────────────────────
+async function loadSettings(){
+  const res=await fetch('/api/settings',{headers:apiHeaders()});
+  const s=await res.json(); applySettings(s);
+}
+function applySettings(s){
+  if(s.defaultDuration) document.getElementById('cfgDuration').value=s.defaultDuration;
+  if(s.title) document.getElementById('cfgTitle').value=s.title||'';
+  if(typeof s.showClock!=='undefined') document.getElementById('cfgClock').checked=s.showClock!==false;
+  if(typeof s.showBar!=='undefined') document.getElementById('cfgBar').checked=s.showBar!==false;
+}
+async function saveSettings(){
+  const payload={defaultDuration:parseInt(document.getElementById('cfgDuration').value),title:document.getElementById('cfgTitle').value,showClock:document.getElementById('cfgClock').checked,showBar:document.getElementById('cfgBar').checked};
+  await fetch('/api/settings',{method:'PUT',headers:{...apiHeaders(),'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  toast('Configuración guardada','success');
+}
+
+// ── MISC ──────────────────────────────────────────────
+// ── LIGHT / DARK MODE ────────────────────────────────
+function toggleTheme(){
+  const isLight = document.documentElement.classList.toggle('light');
+  document.getElementById('themeBtn').textContent = isLight ? '🌑' : '🌙';
+  localStorage.setItem('bos_theme', isLight ? 'light' : 'dark');
+}
+function applyStoredTheme(){
+  const t = localStorage.getItem('bos_theme');
+  if(t === 'light'){
+    document.documentElement.classList.add('light');
+    const btn = document.getElementById('themeBtn');
+    if(btn) btn.textContent = '🌑';
+  }
+}
+
+// ── CONTADOR TIEMPO DIARIO ────────────────────────────
+function calcDailyTime(){
+  const now = new Date();
+  const active = publications.filter(p => {
+    if(!p.active) return false;
+    if(p.indefinite) return true;
+    const s = p.startDate ? new Date(p.startDate) : null;
+    const e = p.endDate   ? new Date(p.endDate)   : null;
+    if(s && now < s) return false;
+    if(e && now > e) return false;
+    return true;
+  });
+
+  if(!active.length){
+    document.getElementById('timerH').textContent = '0';
+    document.getElementById('timerM').textContent = '0';
+    document.getElementById('timerS').textContent = '0';
+    document.getElementById('timerDetail').textContent = 'sin publicaciones activas hoy';
+    return;
+  }
+
+  const totalSeg = active.reduce((sum, p) => sum + (p.duration || 8), 0);
+
+  const h   = Math.floor(totalSeg / 3600);
+  const min = Math.floor((totalSeg % 3600) / 60);
+  const seg = totalSeg % 60;
+
+  document.getElementById('timerH').textContent = h;
+  document.getElementById('timerM').textContent = min;
+  document.getElementById('timerS').textContent = seg;
+  const avg = Math.round(totalSeg / active.length);
+  document.getElementById('timerDetail').textContent =
+    `${active.length} publicación(es) activa(s) · promedio ${avg}s por publicación`;
+}
+
+function forceRefreshTV(){ socket.emit('admin:forceRefresh'); toast('Señal enviada al TV','info'); }
+function copyUrl(id){ navigator.clipboard.writeText(document.getElementById(id).value); toast('Copiado','success'); }
+function showView(name){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.view===name));
+  // Recargar iframe del TV al entrar a vista previa
+  if(name === 'preview') {
+    const iframe = document.getElementById('tvIframe');
+    if(iframe) iframe.src = '/tv?muted=1&t=' + Date.now();
+  }
+  const t={publications:'Publicaciones',preview:'Vista Previa TV',users:'Usuarios',logs:'Actividad',settings:'Configuración',bloomberg:'Bloomberg'};
+
+  document.getElementById('topbarTitle').textContent=t[name]||name;
+  document.getElementById('searchBox').style.display=name==='publications'?'flex':'none';
+  document.getElementById('btnNewPub').style.display=name==='publications'?'flex':'none';
+  if(name==='logs') loadLogs();
+  closeSidebar();
+}
+function toggleSidebar(){ document.getElementById('sidebar').classList.toggle('open'); document.getElementById('sidebarOverlay').classList.toggle('open'); }
+function closeSidebar(){ document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebarOverlay').classList.remove('open'); }
+function toast(msg,type='info'){
+  const stack=document.getElementById('toastStack');
+  const el=document.createElement('div');
+  el.className=`toast ${type}`;
+  const icons={success:'✅',error:'❌',info:'ℹ️'};
+  el.innerHTML=`<span>${icons[type]||'ℹ️'}</span><span>${msg}</span>`;
+  stack.appendChild(el);
+  setTimeout(()=>el.remove(),3500);
+}
+
+// ── DRAG & DROP REORDER con SortableJS ──────────────
+let sortableInstance = null;
+
+function initDragDrop(){
+  const grid = document.getElementById('pubGrid');
+  if(sortableInstance){ sortableInstance.destroy(); sortableInstance = null; }
+  if(typeof Sortable === 'undefined'){
+    console.warn('SortableJS no cargado aún, reintentando...');
+    setTimeout(initDragDrop, 500);
+    return;
+  }
+  sortableInstance = Sortable.create(grid, {
+    animation: 200,
+    ghostClass: 'dragging',
+    chosenClass: 'drag-chosen',
+    handle: '.drag-handle',
+    forceFallback: false,
+    onEnd: saveOrder
+  });
+}
+
+// ── DRAG & DROP UPLOAD ZONE ───────────────────────────
+const zone=document.getElementById('uploadZone');
+zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('dragover');});
+zone.addEventListener('dragleave',()=>zone.classList.remove('dragover'));
+zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('dragover');const f=e.dataTransfer.files[0];if(f){document.getElementById('fMedia').files=e.dataTransfer.files;previewMedia();}});
+
+// Arranque
+applyStoredTheme();
+(async()=>{
+  const valid=await checkToken();
+  if(valid){ enterApp(); }
+  else{ document.getElementById('loginScreen').style.display='flex'; setTimeout(()=>document.getElementById('loginUser').focus(),100); }
+})();
+</script>
+<script src="/sortable.min.js"></script>
+</body>
+</html>

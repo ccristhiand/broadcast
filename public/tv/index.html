@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="robots" content="noindex"/>
+<title>BroadcastOS — Smart TV</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Syne:wght@700;800;900&display=swap" rel="stylesheet"/>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--accent:#3b82f6;--accent2:#6366f1}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;color:#fff;font-family:'Inter',sans-serif;cursor:none}
+#screen{width:100vw;height:100vh;position:relative;overflow:hidden;background:#000}
+.slide{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;opacity:0;pointer-events:none;will-change:opacity,transform}
+.slide.entering{pointer-events:auto}
+.slide.active{opacity:1;pointer-events:auto;z-index:2}
+.slide.exiting{z-index:1}
+.trans-fade.entering{animation:fadeIn .8s ease forwards}
+.trans-fade.exiting{animation:fadeOut .8s ease forwards}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes fadeOut{from{opacity:1}to{opacity:0}}
+.trans-zoom.entering{animation:zoomIn .9s cubic-bezier(.16,1,.3,1) forwards}
+.trans-zoom.exiting{animation:zoomOut .6s ease forwards}
+@keyframes zoomIn{from{opacity:0;transform:scale(1.08)}to{opacity:1;transform:scale(1)}}
+@keyframes zoomOut{from{opacity:1;transform:scale(1)}to{opacity:0;transform:scale(.95)}}
+.trans-slide.entering{animation:slideInLeft .75s cubic-bezier(.16,1,.3,1) forwards}
+.trans-slide.exiting{animation:slideOutLeft .6s ease forwards}
+@keyframes slideInLeft{from{opacity:0;transform:translateX(60px)}to{opacity:1;transform:translateX(0)}}
+@keyframes slideOutLeft{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(-60px)}}
+.trans-wipe.entering{animation:wipeUp .8s cubic-bezier(.16,1,.3,1) forwards}
+.trans-wipe.exiting{animation:wipeDown .6s ease forwards}
+@keyframes wipeUp{from{opacity:0;transform:translateY(40px)}to{opacity:1;transform:translateY(0)}}
+@keyframes wipeDown{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-40px)}}
+.trans-reveal.entering{animation:reveal .9s cubic-bezier(.16,1,.3,1) forwards}
+.trans-reveal.exiting{animation:fadeOut .5s ease forwards}
+@keyframes reveal{from{clip-path:inset(0 100% 0 0);opacity:1}to{clip-path:inset(0 0% 0 0);opacity:1}}
+.slide-media{position:absolute;inset:0;z-index:0}
+.slide-media img{width:100%;height:100%;object-fit:cover;display:block}
+.slide-media video{width:100%;height:100%;object-fit:cover;display:block}
+.slide.active .slide-media img{animation:kenBurns 14s ease-in-out infinite alternate}
+@keyframes kenBurns{from{transform:scale(1.04) translate(-1%,-1%)}to{transform:scale(1.12) translate(1%,1%)}}
+.slide-overlay{position:absolute;inset:0;z-index:1}
+.overlay-gradient{background:linear-gradient(to top,rgba(0,0,0,.85) 0%,rgba(0,0,0,.3) 40%,rgba(0,0,0,.05) 70%,transparent 100%);position:absolute;inset:0}
+.overlay-side{background:linear-gradient(to right,rgba(0,0,0,.7) 0%,transparent 60%);position:absolute;inset:0}
+.slide-content{position:absolute;bottom:0;left:0;right:0;z-index:3;padding:0 7% 120px;display:flex;flex-direction:column;gap:14px}
+.content-tag{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;background:rgba(59,130,246,.9);color:#fff;padding:5px 14px;border-radius:4px;width:fit-content;animation:tagIn .5s .3s ease both}
+@keyframes tagIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.slide-title{font-family:'Syne',sans-serif;font-size:clamp(32px,5.5vw,88px);font-weight:900;line-height:1.05;letter-spacing:-2px;text-shadow:0 2px 40px rgba(0,0,0,.6);max-width:900px;animation:titleIn .7s .2s cubic-bezier(.16,1,.3,1) both}
+@keyframes titleIn{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+.slide-subtitle{font-size:clamp(16px,2.2vw,32px);font-weight:500;color:rgba(255,255,255,.85);max-width:700px;animation:titleIn .7s .35s cubic-bezier(.16,1,.3,1) both}
+.slide-desc{font-size:clamp(13px,1.4vw,20px);color:rgba(255,255,255,.65);line-height:1.6;max-width:600px;animation:titleIn .7s .45s cubic-bezier(.16,1,.3,1) both}
+.text-slide{padding:8%;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;position:absolute;inset:0;z-index:3}
+.accent-line{width:60px;height:4px;border-radius:2px;background:linear-gradient(90deg,var(--accent),var(--accent2));animation:tagIn .5s .15s ease both}
+#progressBar{position:fixed;bottom:0;left:0;height:3px;z-index:100;background:linear-gradient(90deg,var(--accent),var(--accent2));width:0%;transition:width linear}
+#statusBar{position:fixed;bottom:0;left:0;right:0;z-index:90;height:70px;background:linear-gradient(to top,rgba(0,0,0,.85),transparent);display:flex;align-items:flex-end;justify-content:space-between;padding:0 40px 14px}
+#clock{font-family:'Syne',sans-serif;font-size:32px;font-weight:700;letter-spacing:-1px;line-height:1}
+#clockDate{font-size:13px;color:rgba(255,255,255,.5);font-weight:400;letter-spacing:.5px;margin-top:2px}
+.dot-indicators{display:flex;gap:5px;align-items:center}
+.dot{width:6px;height:6px;border-radius:3px;background:rgba(255,255,255,.25);transition:all .4s ease}
+.dot.active{width:18px;background:rgba(255,255,255,.8)}
+.slide-counter{font-size:13px;color:rgba(255,255,255,.4);letter-spacing:1px;font-weight:500;display:flex;align-items:center;gap:6px}
+#logoMark{position:fixed;top:30px;right:36px;z-index:90;display:flex;align-items:center;gap:10px;opacity:.6}
+.logo-icon{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-size:16px}
+.logo-name{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;letter-spacing:-.5px}
+
+#noContent{display:none;position:fixed;inset:0;z-index:200;background:#030712;align-items:center;justify-content:center;flex-direction:column;gap:20px}
+.no-icon{font-size:80px;opacity:.3}
+.no-text{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:rgba(255,255,255,.3)}
+.no-sub{font-size:14px;color:rgba(255,255,255,.2);letter-spacing:.5px}
+</style>
+</head>
+<body>
+<audio id="silentAudio" src="data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAA1N3aXRjaCBQbHVzIMKpIE5DSCBTb2Z0d2FyZQBUSVQyAAAABgAAAzIyMzUAVFNTRQAAAA8AAANMYXZmNTcuODMuMTAwAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV" preload="auto"></audio>
+<div id="screen"></div>
+<div id="progressBar"></div>
+    <span style="font-size:10px;font-weight:800;color:rgba(255,255,255,.8)">BroadcastOS</span>
+  </div>
+  <div style="flex:1;overflow:hidden">
+    
+</div>
+<div id="statusBar">
+  <div><div id="clock">00:00</div><div id="clockDate"></div></div>
+  <div><div class="dot-indicators" id="dotIndicators"></div></div>
+  <div class="slide-counter"><span id="currentNum">1</span> / <span id="totalNum">1</span></div>
+</div>
+<div id="logoMark"><div class="logo-icon">📡</div><div class="logo-name">BroadcastOS</div></div>
+<div id="noContent" style="display:flex">
+  <div class="no-icon">📡</div>
+  <div class="no-text">Sin contenido activo</div>
+  <div class="no-sub">Agrega publicaciones desde el panel administrativo</div>
+</div>
+<script>
+const socket = io();
+let publications = [];
+let allSlides = [];
+let currentIndex = 0;
+let timer = null;
+let progressTimer = null;
+let isTransitioning = false;
+let settings = { showClock: true, showBar: true };
+const TRANSITIONS = ['trans-fade','trans-zoom','trans-slide','trans-wipe','trans-reveal'];
+let lastTrans = -1;
+
+socket.on('publications:update', loadAndRefresh);
+socket.on('settings:update', s => { settings = {...settings,...s}; applySettings(); });
+socket.on('tv:refresh', loadAndRefresh);
+
+
+// Detectar si está en modo muted (vista previa del admin)
+const IS_MUTED = new URLSearchParams(location.search).get('muted') === '1';
+
+
+async function init() {
+  // Intentar desbloquear audio automáticamente al cargar
+  try {
+    const silent = document.getElementById('silentAudio');
+    await silent.play();
+    silent.pause();
+  } catch(e) {}
+
+  await loadPublications();
+  await loadSettings();
+  startClock();
+  applySettings();
+}
+
+async function loadPublications() {
+  try {
+    const res = await fetch('/api/publications/active');
+    publications = await res.json();
+  } catch(e) { console.error('Error cargando publicaciones:', e); }
+  buildSlideList();
+}
+
+function getCurrentTimeStr() {
+  const now = new Date();
+  return String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+}
+
+function getActiveEmbed() {
+  const t = getCurrentTimeStr();
+  return publications.find(p => {
+    if(p.type !== 'embed') return false;
+    if(!p.timeStart && !p.timeEnd) return false; // sin horario → rota normal
+    if(p.timeStart && t < p.timeStart) return false;
+    if(p.timeEnd   && t > p.timeEnd)   return false;
+    return true;
+  }) || null;
+}
+
+function buildSlideList() {
+  const embed = getActiveEmbed();
+
+  if(embed) {
+    // Horario activo — mostrar SOLO el embed, SIN temporizador ni duración
+    clearTimeout(timer);
+    clearInterval(progressTimer);
+    isTransitioning = false;
+    allSlides = [embed];
+    renderDots();
+
+    // Limpiar screen y mostrar embed directo sin animación
+    document.getElementById('noContent').style.display = 'none';
+    const screen = document.getElementById('screen');
+    // Detener todo lo anterior
+    screen.querySelectorAll('video,audio').forEach(m=>{try{m.pause();m.currentTime=0;}catch(e){}});
+    screen.querySelectorAll('iframe').forEach(f=>{try{f.src='about:blank';}catch(e){}});
+    screen.innerHTML = '';
+
+    const slide = document.createElement('div');
+    slide.className = 'slide active';
+    slide.style.opacity = '1';
+    slide.innerHTML = buildSlideHTML(embed);
+    screen.appendChild(slide);
+
+    // Barra de progreso — mostrar tiempo restante hasta hora fin
+    if(embed.timeEnd) {
+      const now = new Date();
+      const [h,m] = embed.timeEnd.split(':').map(Number);
+      const end = new Date(); end.setHours(h,m,0,0);
+      const remaining = Math.max(0, end - now);
+      const bar = document.getElementById('progressBar');
+      bar.style.transition = 'none'; bar.style.width = '0%';
+      requestAnimationFrame(() => {
+        bar.style.transition = `width ${remaining}ms linear`;
+        bar.style.width = '100%';
+      });
+    } else {
+      document.getElementById('progressBar').style.width = '0%';
+    }
+
+    document.getElementById('currentNum').textContent = '1';
+    document.getElementById('totalNum').textContent = '1';
+    // NO llamar scheduleNext — el embed se queda hasta que cambie el horario
+    return;
+  }
+
+  // Sin embed activo — carrusel normal (sin embeds con horario)
+  allSlides = publications.filter(p => {
+    if(p.type !== 'embed') return true;
+    // Embeds sin horario rotan normal
+    if(!p.timeStart && !p.timeEnd) return true;
+    // Embeds con horario no aparecen fuera de su horario
+    return false;
+  });
+
+  const total = allSlides.length;
+  renderDots();
+  if(total) {
+    document.getElementById('noContent').style.display = 'none';
+    if(currentIndex >= total) currentIndex = 0;
+    showSlide(currentIndex, 'trans-fade');
+  } else {
+    document.getElementById('noContent').style.display = 'flex';
+    clearTimeout(timer);
+  }
+}
+
+// Verificar horario cada minuto
+setInterval(() => {
+  const embed = getActiveEmbed();
+  const isShowingEmbed = allSlides.length === 1 && allSlides[0]?.type === 'embed';
+
+  if(embed && !isShowingEmbed) {
+    // Entró en horario de embed → cambiar a embed
+    buildSlideList();
+  } else if(!embed && isShowingEmbed) {
+    // Salió del horario → volver al carrusel normal
+    currentIndex = 0;
+    buildSlideList();
+  }
+}, 30000); // revisar cada 30 segundos
+
+
+
+async function loadSettings() {
+  try { const res = await fetch('/api/settings'); settings = await res.json(); } catch(e) {}
+}
+
+async function loadAndRefresh() {
+  clearTimeout(timer);
+  clearInterval(progressTimer);
+  await loadPublications();
+}
+
+function applySettings() {
+  document.getElementById('statusBar').style.display = settings.showBar === false ? 'none' : 'flex';
+  document.getElementById('clock').parentElement.style.display = settings.showClock === false ? 'none' : 'block';
+}
+
+function getNextTransition() {
+  let idx;
+  do { idx = Math.floor(Math.random() * TRANSITIONS.length); } while(idx === lastTrans && TRANSITIONS.length > 1);
+  lastTrans = idx;
+  return TRANSITIONS[idx];
+}
+
+function showSlide(index, transClass) {
+  if(!allSlides.length) return;
+  if(isTransitioning) return;
+  isTransitioning = true;
+  const pub = allSlides[index];
+  const screen = document.getElementById('screen');
+  const transName = transClass || getNextTransition();
+  const ANIM_DURATION = 900;
+  const slide = document.createElement('div');
+  slide.className = `slide ${transName} entering`;
+  slide.innerHTML = buildSlideHTML(pub);
+  // Detener TODO audio ANTES de agregar el nuevo slide
+  screen.querySelectorAll('video, audio').forEach(m => { try { m.pause(); m.currentTime=0; } catch(e){} });
+  screen.querySelectorAll('iframe').forEach(f => { try { f.src='about:blank'; } catch(e){} });
+
+  screen.appendChild(slide);
+  const video = slide.querySelector('video');
+  if(video) {
+    video.currentTime = 0;
+    video.muted = true; // primero muted para garantizar autoplay
+    video.play().then(() => {
+      // Si arrancó con muted, intentar desmutar
+      if(!IS_MUTED) {
+        video.muted = false;
+      }
+    }).catch(()=>{});
+    video.loop = false;
+    video.addEventListener('ended', () => nextSlide());
+  }
+
+  const existing = screen.querySelectorAll('.slide.active');
+  existing.forEach(el => {
+    el.querySelectorAll('video, audio').forEach(media => {
+      try { media.pause(); media.currentTime = 0; } catch(e) {}
+    });
+    el.querySelectorAll('iframe').forEach(media => {
+      try { media.src = 'about:blank'; } catch(e) {}
+    });
+    el.classList.remove('entering');
+    el.classList.add('exiting', transName);
+    setTimeout(() => el.remove(), ANIM_DURATION + 200);
+  });
+  slide.classList.add('active');
+  updateDots(index);
+  updateCounter(index);
+  setTimeout(() => {
+    isTransitioning = false;
+    if(pub.type === 'video') {
+      // video avanza con evento 'ended'
+      startProgress(pub.duration * 1000);
+    } else if(pub.type === 'embed' && (pub.timeStart || pub.timeEnd)) {
+      // embed con horario — sin timer, se queda hasta que cambie la hora
+      // barra de progreso basada en tiempo restante
+      if(pub.timeEnd) {
+        const now2 = new Date();
+        const [hh,mm] = pub.timeEnd.split(':').map(Number);
+        const endT = new Date(); endT.setHours(hh,mm,0,0);
+        const rem = Math.max(0, endT - now2);
+        startProgress(rem);
+      }
+    } else if(pub.type === 'embed') {
+      // embed sin horario — avanza por duración configurada
+      scheduleNext(pub.duration * 1000);
+      startProgress(pub.duration * 1000);
+    } else {
+      scheduleNext(pub.duration * 1000);
+      startProgress(pub.duration * 1000);
+    }
+  }, ANIM_DURATION);
+}
+
+function buildSlideHTML(pub) {
+  // ── EMBED SLIDE (YouTube, Bloomberg Live, web) ────────────
+  if(pub.type === 'embed') {
+    const url = convertToEmbed(pub.embedUrl || '');
+    return `
+    <div style="position:absolute;inset:0;background:#000">
+      <iframe src="${url}"
+        style="width:100%;height:100%;border:none"
+        allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture;fullscreen"
+        ${IS_MUTED ? 'allow="autoplay" sandbox="allow-scripts allow-same-origin"' : 'allowfullscreen'}>
+      </iframe>
+      <div style="position:absolute;top:16px;left:20px;z-index:10;background:rgba(0,0,0,.6);backdrop-filter:blur(8px);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;color:rgba(255,255,255,.8)">
+        🌐 ${esc(pub.title)}
+      </div>
+    </div>`;
+  }
+
+  // ── TEXTO ─────────────────────────────────────────────────
+  if(pub.type === 'text') {
+    return `<div class="text-slide" style="background:${pub.bgColor};--slide-text-color:${pub.textColor}">
+      <div class="accent-line"></div>
+      ${pub.subtitle ? `<div class="content-tag">${esc(pub.subtitle)}</div>` : ''}
+      <div class="slide-title" style="color:${pub.textColor}">${esc(pub.title)}</div>
+      ${pub.description ? `<div class="slide-desc" style="color:${pub.textColor}88">${esc(pub.description)}</div>` : ''}
+    </div>`;
+  }
+  let mediaHTML = '';
+  if(pub.mediaUrl) {
+    if(pub.type === 'video') {
+      mediaHTML = `<div class="slide-media"><video src="${pub.mediaUrl}" autoplay muted playsinline preload="auto"></video></div>`;
+    } else {
+      mediaHTML = `<div class="slide-media"><img src="${pub.mediaUrl}" alt="${esc(pub.title)}" draggable="false"/></div>`;
+    }
+  }
+  return `${mediaHTML}
+  <div class="slide-overlay"><div class="overlay-gradient"></div><div class="overlay-side"></div></div>
+  <div class="slide-content">
+    <div class="accent-line"></div>
+    ${pub.subtitle ? `<div class="content-tag">${esc(pub.subtitle)}</div>` : ''}
+    <div class="slide-title">${esc(pub.title)}</div>
+    ${pub.description ? `<div class="slide-desc">${esc(pub.description)}</div>` : ''}
+  </div>`;
+}
+
+function scheduleNext(durationMs) {
+  clearTimeout(timer);
+  timer = setTimeout(() => nextSlide(), durationMs);
+}
+
+function nextSlide() {
+  clearTimeout(timer);
+  clearInterval(progressTimer);
+  if(!publications.length) return;
+  currentIndex = (currentIndex + 1) % allSlides.length;
+  showSlide(currentIndex);
+}
+
+function startProgress(durationMs) {
+  clearInterval(progressTimer);
+  const bar = document.getElementById('progressBar');
+  bar.style.transition = 'none';
+  bar.style.width = '0%';
+  requestAnimationFrame(() => {
+    bar.style.transition = `width ${durationMs}ms linear`;
+    bar.style.width = '100%';
+  });
+}
+
+function renderDots() {
+  const dots = document.getElementById('dotIndicators');
+  const max = Math.min(allSlides.length, 12);
+  dots.innerHTML = Array.from({length:max}, (_,i) => `<div class="dot${i===0?' active':''}" id="dot-${i}"></div>`).join('');
+}
+
+function updateDots(idx) {
+  document.querySelectorAll('.dot').forEach((d,i) => d.classList.toggle('active', i===idx));
+}
+
+function updateCounter(idx) {
+  document.getElementById('currentNum').textContent = idx + 1;
+  document.getElementById('totalNum').textContent = allSlides.length;
+}
+
+function startClock() {
+  function tick() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2,'0');
+    const m = String(now.getMinutes()).padStart(2,'0');
+    document.getElementById('clock').textContent = `${h}:${m}`;
+    document.getElementById('clockDate').textContent = now.toLocaleDateString('es-PE',{weekday:'long',day:'numeric',month:'long'});
+  }
+  tick();
+  setInterval(tick, 1000);
+}
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function convertToEmbed(url) {
+  if(!url) return '';
+  // YouTube watch → embed
+  const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]{11})/);
+  if(yt) return `https://www.youtube.com/embed/${yt[1]}?autoplay=1&mute=0&controls=0&rel=0`;
+  // YouTube live → embed
+  const ytLive = url.match(/youtube\.com\/live\/([\w-]{11})/);
+  if(ytLive) return `https://www.youtube.com/embed/${ytLive[1]}?autoplay=1&mute=0`;
+  return url;
+}
+
+document.addEventListener('keydown', e => {
+  if(e.key==='ArrowRight'||e.key==='ArrowDown') nextSlide();
+  if(e.key==='ArrowLeft'||e.key==='ArrowUp') {
+    clearTimeout(timer);
+    currentIndex=(currentIndex-1+allSlides.length)%allSlides.length;
+    showSlide(currentIndex);
+  }
+});
+
+let touchStartX = 0;
+document.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; });
+document.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  if(Math.abs(dx) > 60) dx < 0 ? nextSlide() : (() => {
+    clearTimeout(timer); currentIndex=(currentIndex-1+allSlides.length)%allSlides.length; showSlide(currentIndex);
+  })();
+});
+
+init();
+</script>
+</body>
+</html>

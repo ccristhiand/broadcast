@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>BroadcastOS</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@800&family=Inter:wght@400;600&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#080c14;color:#f0f4ff;font-family:'Inter',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.wrap{text-align:center;padding:40px 20px;display:flex;flex-direction:column;align-items:center;gap:24px}
+.icon{width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,#3b82f6,#6366f1);display:grid;place-items:center;font-size:36px}
+h1{font-family:'Syne',sans-serif;font-size:36px;font-weight:800;letter-spacing:-1px}
+p{color:#64748b;font-size:15px;max-width:340px}
+.links{display:flex;flex-direction:column;gap:12px;width:100%;max-width:300px;margin-top:8px}
+a{display:flex;align-items:center;justify-content:center;gap:10px;padding:14px 24px;border-radius:10px;text-decoration:none;font-weight:600;font-size:15px;transition:all .15s}
+.admin{background:linear-gradient(135deg,#3b82f6,#6366f1);color:#fff}
+.tv{background:rgba(255,255,255,.07);color:#f0f4ff;border:1px solid rgba(255,255,255,.12)}
+a:hover{transform:translateY(-2px);opacity:.9}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="icon">📡</div>
+  <h1>BroadcastOS</h1>
+  <p>Sistema de difusión para Smart TV con panel administrativo en tiempo real</p>
+  <div class="links">
+    <a href="/admin" class="admin">🛠️ Panel Administrativo</a>
+    <a href="/tv" class="tv">📺 Vista Smart TV</a>
+  </div>
+</div>
+</body>
+</html>
