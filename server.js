@@ -369,6 +369,43 @@ initDB().then(() => {
     console.log(`🛠️  Admin:     http://localhost:${PORT}/admin\n`);
   });
 }).catch(err => {
-  console.error('❌ Error BD:', err.message);
+  const dialect = process.env.DB_DIALECT || 'mysql';
+  console.error('');
+  console.error('❌ Error al conectar a la base de datos');
+  console.error('─────────────────────────────────────────');
+  console.error('Mensaje:', err.message);
+  console.error('─────────────────────────────────────────');
+  console.error('Configuración actual del .env:');
+  console.error('  DB_DIALECT  :', process.env.DB_DIALECT  || '(no definido)');
+  console.error('  DB_HOST     :', process.env.DB_HOST     || '(no definido)');
+  console.error('  DB_PORT     :', process.env.DB_PORT     || '(no definido)');
+  console.error('  DB_NAME     :', process.env.DB_NAME     || '(no definido)');
+  console.error('  DB_USER     :', process.env.DB_USER     || '(no definido)');
+  console.error('  DB_PASS     :', process.env.DB_PASS     ? '(definido)' : '(no definido)');
+  if(dialect === 'mssql') {
+    console.error('  DB_INSTANCE :', process.env.DB_INSTANCE || '(no definido)');
+    console.error('  DB_ENCRYPT  :', process.env.DB_ENCRYPT  || '(no definido)');
+  }
+  console.error('─────────────────────────────────────────');
+  if(err.message.includes('SELF_SIGNED_CERT') || err.message.includes('certificate')) {
+    console.error('💡 Agrega DB_ENCRYPT=false en tu .env');
+  } else if(err.message.includes('Login failed') || err.message.includes('password')) {
+    console.error('💡 Verifica DB_USER y DB_PASS en tu .env');
+  } else if(err.message.includes('Could not connect') || err.message.includes('sequence')) {
+    console.error('💡 Verifica DB_HOST, DB_PORT y DB_INSTANCE');
+    console.error('   ¿El servidor BD está encendido?');
+    console.error('   ¿El puerto 1433 está abierto en el firewall?');
+    console.error('   ¿El servicio SQL Server Browser está activo?');
+  } else if(err.message.includes('Unknown database') || err.message.includes('Cannot open database')) {
+    console.error('💡 La BD "' + (process.env.DB_NAME||'broadcastos') + '" no existe — corre el script SQL primero');
+  } else if(err.message.includes('ECONNREFUSED')) {
+    console.error('💡 No hay nada escuchando en ' + (process.env.DB_HOST||'localhost') + ':' + (process.env.DB_PORT||'1433'));
+  } else if(err.message.includes('comment') || err.message.includes('#')) {
+    console.error('💡 Tu .env tiene comentarios en la misma línea que un valor');
+    console.error('   Incorrecto: DB_ENCRYPT=false  # comentario');
+    console.error('   Correcto:   DB_ENCRYPT=false');
+  }
+  console.error('─────────────────────────────────────────');
+  console.error('');
   process.exit(1);
 });
