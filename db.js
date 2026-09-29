@@ -2,6 +2,11 @@ require('dotenv').config();
 const { Sequelize, DataTypes } = require('sequelize');
 
 const dialect = process.env.DB_DIALECT || 'mysql';
+
+// SQL Server no soporta ENUM — usar STRING en su lugar
+const ENUM = (...values) => dialect === 'mssql'
+  ? DataTypes.STRING(20)
+  : DataTypes.ENUM(...values);
 const dialectOptions = {};
 if (dialect === 'mssql') {
   dialectOptions.options = {
@@ -34,7 +39,7 @@ const Publication = sequelize.define('Publication', {
   title:       { type: DataTypes.STRING(200), allowNull: false },
   subtitle:    { type: DataTypes.STRING(300), allowNull: true },
   description: { type: DataTypes.TEXT, allowNull: true },
-  type:        { type: DataTypes.ENUM('image','video','text','embed'), defaultValue: 'image' },
+  type:        { type: ENUM('image','video','text','embed'), defaultValue: 'image' },
   mediaUrl:    { type: DataTypes.STRING(500), allowNull: true },
   mediaType:   { type: DataTypes.STRING(100), allowNull: true },
   bgColor:     { type: DataTypes.STRING(20), defaultValue: '#0a0a1a' },
@@ -62,7 +67,7 @@ const User = sequelize.define('User', {
   username:  { type: DataTypes.STRING(80), allowNull: false, unique: true },
   email:     { type: DataTypes.STRING(200), allowNull: true },
   password:  { type: DataTypes.STRING(255), allowNull: false },
-  role:      { type: DataTypes.ENUM('admin','editor'), defaultValue: 'editor' },
+  role:      { type: ENUM('admin','editor'), defaultValue: 'editor' },
   active:    { type: DataTypes.BOOLEAN, defaultValue: true },
   lastLogin: { type: DataTypes.DATE, allowNull: true },
 }, { tableName: 'users', timestamps: true });
@@ -131,7 +136,7 @@ const BloombergNews = sequelize.define('BloombergNews', {
 const BloombergPrice = sequelize.define('BloombergPrice', {
   symbol:    { type: DataTypes.STRING(50), primaryKey: true },
   name:      { type: DataTypes.STRING(100), allowNull: false },
-  category:  { type: DataTypes.ENUM('fx','index','equity','crypto','commodity'), defaultValue: 'fx' },
+  category:  { type: ENUM('fx','index','equity','crypto','commodity'), defaultValue: 'fx' },
   lastPrice: { type: DataTypes.DECIMAL(18,4), defaultValue: 0 },
   prevClose: { type: DataTypes.DECIMAL(18,4), allowNull: true },
   changeAmt: { type: DataTypes.DECIMAL(18,4), allowNull: true },
@@ -149,7 +154,12 @@ const BloombergConfig = sequelize.define('BloombergConfig', {
 async function initDB() {
   await sequelize.authenticate();
   console.log(`✅ Base de datos conectada [${dialect.toUpperCase()}]`);
-  await sequelize.sync({ alter: true });
+  // SQL Server no soporta alter con ENUM — usar sync sin alter
+  if(dialect === 'mssql') {
+    await sequelize.sync({ force: false });
+  } else {
+    await sequelize.sync({ alter: true });
+  }
   console.log('✅ Tablas sincronizadas');
 }
 
