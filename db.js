@@ -5,9 +5,12 @@ const dialect = process.env.DB_DIALECT || 'mysql';
 const dialectOptions = {};
 if (dialect === 'mssql') {
   dialectOptions.options = {
-    encrypt: process.env.DB_ENCRYPT === 'true',
+    encrypt:                process.env.DB_ENCRYPT === 'true',
     trustServerCertificate: true,
-    enableArithAbort: true,
+    enableArithAbort:       true,
+    instanceName:           process.env.DB_INSTANCE || undefined,
+    connectTimeout:         30000,
+    requestTimeout:         30000,
   };
 }
 
@@ -21,7 +24,7 @@ const sequelize = new Sequelize(
     dialect,
     dialectOptions,
     logging: false,
-    pool: { max: 5, min: 0, acquire: 30000, idle: 10000 },
+    pool: { max: 5, min: 0, acquire: 60000, idle: 10000 },
   }
 );
 
